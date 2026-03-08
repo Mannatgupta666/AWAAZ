@@ -72,16 +72,24 @@ async def upload_document(
     Supports: Aadhaar, PAN, Voter ID, Driving License, etc.
     """
     try:
+        print(f"Received file: {file.filename}, type: {document_type}")
+        
         # Read file content
         content = await file.read()
+        print(f"File size: {len(content)} bytes")
         
         # Process document using OCR service
+        print("Calling OCR service...")
         ocr_result = ocr_service.process_document(content, document_type)
+        print(f"OCR result status: {ocr_result.get('status')}")
         
         if ocr_result['status'] == 'error':
-            raise HTTPException(status_code=400, detail=ocr_result['error_message'])
+            error_msg = ocr_result.get('error_message', 'Unknown OCR error')
+            print(f"OCR error: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
         
         extracted_data = ocr_result.get('extracted_data', {})
+        print(f"Extracted data: {extracted_data}")
         
         return DocumentVerificationResponse(
             document_type=document_type,
@@ -92,8 +100,13 @@ async def upload_document(
             errors=[]
         )
     
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Document upload failed: {str(e)}")
+        import traceback
+        error_detail = f"Document upload failed: {str(e) or 'Unknown error'}\n{traceback.format_exc()}"
+        print(error_detail)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 @router.post("/generate-affidavit")
 async def generate_affidavit(request: AffidavitRequest):
