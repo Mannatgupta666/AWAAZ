@@ -91,6 +91,7 @@ async function handleSendMessage() {
       },
       body: JSON.stringify({
         message: text,
+        language: "en"
       }),
     });
 
@@ -103,8 +104,23 @@ async function handleSendMessage() {
     removeTypingIndicator();
 
     // Display backend response
-    if (data.response) {
-      addBotMessage(data.response);
+    if (data.reply) {
+      let message = data.reply;
+      
+      // Add scheme information if available
+      if (data.schemes && data.schemes.length > 0) {
+        message += "\n\n📋 Eligible Schemes:\n";
+        data.schemes.forEach(scheme => {
+          message += `• ${scheme}\n`;
+        });
+      }
+      
+      // Add next step if available
+      if (data.next_step === "document_upload") {
+        message += "\n\n📄 Next: Upload your documents for verification";
+      }
+      
+      addBotMessage(message);
     } else if (data.message) {
       addBotMessage(data.message);
     } else {
@@ -190,45 +206,41 @@ async function handleFileUpload(event) {
     removeTypingIndicator();
 
     // Display verification result
-    if (data.status === "success" || data.verification_status === "valid") {
+    if (data.verified || data.status === "success") {
       let resultMessage = "✅ Document verified successfully!\n\n";
 
       if (data.document_type) {
         resultMessage += `Document Type: ${data.document_type}\n`;
       }
 
-      if (data.extracted_fields) {
-        resultMessage += "\nExtracted Information:\n";
-        for (const [key, value] of Object.entries(data.extracted_fields)) {
-          resultMessage += `• ${key}: ${value}\n`;
-        }
+      if (data.name) {
+        resultMessage += `Name: ${data.name}\n`;
+      }
+      
+      if (data.document_number) {
+        resultMessage += `Document Number: ${data.document_number}\n`;
       }
 
-      if (data.message) {
-        resultMessage += `\n${data.message}`;
+      if (data.clarity_score) {
+        resultMessage += `\nClarity Score: ${(data.clarity_score * 100).toFixed(1)}%`;
       }
 
       addBotMessage(resultMessage);
-    } else if (
-      data.status === "error" ||
-      data.verification_status === "invalid"
-    ) {
+    } else {
       let errorMessage = "❌ Document verification failed.\n\n";
 
-      if (data.validation_errors && data.validation_errors.length > 0) {
+      if (data.errors && data.errors.length > 0) {
         errorMessage += "Issues found:\n";
-        data.validation_errors.forEach((error) => {
+        data.errors.forEach((error) => {
           errorMessage += `• ${error}\n`;
         });
-      } else if (data.message) {
-        errorMessage += data.message;
+      } else if (data.detail) {
+        errorMessage += data.detail;
       } else {
         errorMessage += "Please upload a clear image of your document.";
       }
 
       addBotMessage(errorMessage);
-    } else {
-      addBotMessage(data.message || "Document uploaded successfully!");
     }
   } catch (error) {
     console.error("Error uploading document:", error);

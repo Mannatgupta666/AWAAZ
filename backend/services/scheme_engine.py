@@ -284,8 +284,60 @@ Keep it under 100 words. Be friendly and encouraging."""
             return f"Good news! You may be eligible for {top_scheme['name']}. Would you like to apply?"
     
     def _load_schemes(self) -> list:
-        """Load schemes from database or S3"""
-        # Mock data - replace with actual S3 fetch
+        """Load schemes from SQLite database"""
+        import sqlite3
+        import os
+        
+        try:
+            # Database path
+            db_path = os.path.join(os.path.dirname(__file__), '..', '..', 'database', 'schemes.db')
+            
+            # Connect to database
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Fetch all schemes
+            cursor.execute('''
+                SELECT name, target_occupation, max_income, gender, min_age, max_age, category, benefit, description, application_url
+                FROM schemes
+            ''')
+            
+            schemes = []
+            for row in cursor.fetchall():
+                # Parse category (can be comma-separated for multiple categories)
+                category = row[6]
+                if category and ',' in category:
+                    category = category.split(',')
+                elif category and category != 'any':
+                    category = [category]
+                else:
+                    category = 'any'
+                
+                schemes.append({
+                    "name": row[0],
+                    "target_occupation": row[1],
+                    "max_income": row[2],
+                    "gender": row[3],
+                    "min_age": row[4],
+                    "max_age": row[5],
+                    "category": category,
+                    "benefit": row[7],
+                    "description": row[8],
+                    "application_url": row[9]
+                })
+            
+            conn.close()
+            
+            logger.info(f"Loaded {len(schemes)} schemes from database")
+            return schemes
+            
+        except Exception as e:
+            logger.error(f"Failed to load schemes from database: {str(e)}")
+            # Fallback to hardcoded schemes if database fails
+            return self._load_schemes_fallback()
+    
+    def _load_schemes_fallback(self) -> list:
+        """Fallback: Load hardcoded schemes if database fails"""
         return [
             {
                 "name": "PM Kisan",
