@@ -1,0 +1,33 @@
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# AWS SDK
+boto3==1.29.7
+botocore==1.32.7
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Database
+sqlalchemy==2.0.23
+# sqlite3 is built into Python, no need to install
+
+# PDF Generation
+reportlab==4.0.7
+Jinja2==3.1.2
+
+# Image processing (backup for Textract)
+opencv-python==4.8.1.78
+pytesseract==0.3.10
+Pillow==10.1.0
+
+# HTTP requests
+requests==2.31.0
+httpx==0.25.2
+
+# Utilities
+pydantic==2.5.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
