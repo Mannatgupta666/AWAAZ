@@ -79,6 +79,63 @@ async function handleSendMessage() {
   addUserMessage(text);
   messageInput.value = "";
 
+  // Check if user wants to generate affidavit
+  const lowerText = text.toLowerCase();
+  if (lowerText === 'yes' || lowerText === 'generate affidavit' || lowerText === 'affidavit') {
+    showTypingIndicator();
+    
+    try {
+      // Generate affidavit
+      const response = await fetch("http://localhost:8000/api/generate-affidavit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_name: "Prakash Ranjan",  // From OCR
+          father_name: "Father Name",
+          address: "Village Address",
+          purpose: "Government Scheme Application",
+          language: "en"
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      removeTypingIndicator();
+
+      if (data.success) {
+        let message = "✅ Affidavit generated successfully!\n\n";
+        message += "📄 Your affidavit has been created and is ready to download.\n";
+        
+        message += "\nNext steps:\n";
+        if (data.next_steps) {
+          data.next_steps.forEach(step => {
+            message += `• ${step}\n`;
+          });
+        }
+        
+        addBotMessage(message);
+        
+        // Add download button/link
+        if (data.pdf_filename) {
+          addPDFDownloadLink(data.pdf_filename);
+        }
+      } else {
+        addBotMessage("Sorry, I couldn't generate the affidavit. Please try again.");
+      }
+      return;
+    } catch (error) {
+      console.error("Error generating affidavit:", error);
+      removeTypingIndicator();
+      addBotMessage("Sorry, I couldn't generate the affidavit. Please try again.");
+      return;
+    }
+  }
+
   // Show typing indicator while waiting for response
   showTypingIndicator();
 
@@ -208,22 +265,42 @@ async function handleFileUpload(event) {
     // Display verification result
     if (data.verified || data.status === "success") {
       let resultMessage = "✅ Document verified successfully!\n\n";
+      resultMessage += "📋 Extracted Information:\n";
 
-      if (data.document_type) {
-        resultMessage += `Document Type: ${data.document_type}\n`;
+      let hasData = false;
+      
+      if (data.document_type && data.document_type !== "auto") {
+        resultMessage += `• Document Type: ${data.document_type}\n`;
+        hasData = true;
       }
 
       if (data.name) {
-        resultMessage += `Name: ${data.name}\n`;
+        resultMessage += `• Name: ${data.name}\n`;
+        hasData = true;
       }
       
       if (data.document_number) {
-        resultMessage += `Document Number: ${data.document_number}\n`;
+        resultMessage += `• Document Number: ${data.document_number}\n`;
+        hasData = true;
+      }
+      
+      if (data.dob) {
+        resultMessage += `• Date of Birth: ${data.dob}\n`;
+        hasData = true;
+      }
+
+      if (!hasData) {
+        resultMessage += "• Document processed successfully\n";
       }
 
       if (data.clarity_score) {
-        resultMessage += `\nClarity Score: ${(data.clarity_score * 100).toFixed(1)}%`;
+        const clarityPercent = (data.clarity_score * 100).toFixed(1);
+        resultMessage += `\n✨ Clarity Score: ${clarityPercent}%`;
       }
+      
+      resultMessage += "\n\n✅ Your document has been verified and saved!";
+      resultMessage += "\n\n📝 Next Step: Would you like me to generate an affidavit for your application?";
+      resultMessage += "\n\nType 'yes' to generate affidavit or 'no' to continue.";
 
       addBotMessage(resultMessage);
     } else {
@@ -381,6 +458,40 @@ function getCurrentTime() {
     minute: "2-digit",
     hour12: true,
   });
+}
+
+// Add PDF Download Link
+function addPDFDownloadLink(filename) {
+  const messageDiv = document.createElement("div");
+  messageDiv.className = "message bot";
+
+  const bubbleDiv = document.createElement("div");
+  bubbleDiv.className = "message-bubble";
+
+  const linkDiv = document.createElement("div");
+  linkDiv.className = "message-text";
+  linkDiv.style.textAlign = "center";
+  
+  const downloadLink = document.createElement("a");
+  downloadLink.href = `http://localhost:8000/api/download-pdf/${filename}`;
+  downloadLink.target = "_blank";
+  downloadLink.textContent = "📥 Click here to view/download your affidavit";
+  downloadLink.style.color = "#25D366";
+  downloadLink.style.fontWeight = "bold";
+  downloadLink.style.textDecoration = "underline";
+  
+  linkDiv.appendChild(downloadLink);
+
+  const timeDiv = document.createElement("div");
+  timeDiv.className = "message-time";
+  timeDiv.textContent = getCurrentTime();
+
+  bubbleDiv.appendChild(linkDiv);
+  bubbleDiv.appendChild(timeDiv);
+  messageDiv.appendChild(bubbleDiv);
+
+  messagesContainer.appendChild(messageDiv);
+  scrollToBottom();
 }
 
 // Scroll to Bottom

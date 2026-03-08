@@ -74,6 +74,9 @@ Return only valid JSON, no explanation."""
             user_data["occupation"] = "student"
         elif "worker" in message_lower or "labour" in message_lower:
             user_data["occupation"] = "worker"
+        elif "pregnant" in message_lower or "expecting" in message_lower or "mother" in message_lower:
+            user_data["occupation"] = "any"
+            user_data["gender"] = "female"  # Set gender for pregnant women
         else:
             user_data["occupation"] = "any"
         
@@ -88,7 +91,7 @@ Return only valid JSON, no explanation."""
             user_data["category"] = "General"
         
         # Extract age
-        age_match = re.search(r'(\d+)\s*(?:year|yr)', message_lower)
+        age_match = re.search(r'(\d+)\s*(?:year|yr|old)', message_lower)
         if age_match:
             user_data["age"] = int(age_match.group(1))
         else:
@@ -105,13 +108,18 @@ Return only valid JSON, no explanation."""
         else:
             user_data["income"] = 2  # Default low income
         
-        # Extract gender
-        if "woman" in message_lower or "female" in message_lower or "mahila" in message_lower or "girl" in message_lower:
-            user_data["gender"] = "female"
-        elif "man" in message_lower or "male" in message_lower or "boy" in message_lower:
-            user_data["gender"] = "male"
-        else:
-            user_data["gender"] = "any"
+        # Extract gender - IMPORTANT: Check if not already set
+        if "gender" not in user_data:
+            if "woman" in message_lower or "female" in message_lower or "mahila" in message_lower or "girl" in message_lower or "pregnant" in message_lower or "mother" in message_lower:
+                user_data["gender"] = "female"
+            elif "man" in message_lower or "male" in message_lower or "boy" in message_lower:
+                user_data["gender"] = "male"
+            else:
+                # Default to male for farmers/workers (most common case)
+                if user_data.get("occupation") in ["farmer", "worker"]:
+                    user_data["gender"] = "male"
+                else:
+                    user_data["gender"] = "any"
         
         # Extract state
         states = ["punjab", "haryana", "delhi", "uttar pradesh", "up", "bihar", "maharashtra"]
@@ -185,19 +193,25 @@ Return only valid JSON."""
                 score += 50  # Higher score for exact occupation match
                 reasons.append("Occupation matches")
             
-            # Check gender (higher priority for gender-specific schemes)
+            # Check gender (STRICT filtering - higher priority)
             scheme_gender = scheme.get("gender", "any")
             user_gender = user_data.get("gender", "any")
-            if scheme_gender == "any":
+            
+            # CRITICAL: If scheme is gender-specific and user gender doesn't match, SKIP
+            if scheme_gender != "any" and user_gender != "any":
+                if user_gender != scheme_gender:
+                    # Gender mismatch - skip this scheme entirely
+                    continue
+                else:
+                    # Gender matches
+                    score += 25
+                    reasons.append(f"Gender-specific scheme for {user_gender}")
+            elif scheme_gender == "any":
                 score += 5
-            elif user_gender == scheme_gender:
-                score += 25  # Higher score for gender match
-                reasons.append(f"Gender-specific scheme for {user_gender}")
             elif user_gender == "any":
+                # User gender unknown, but scheme is gender-specific
+                # Only include if score is already high from other factors
                 score += 5
-            else:
-                # Gender doesn't match - skip this scheme
-                continue
             
             # Check category (SC/ST/OBC)
             scheme_category = scheme.get("category", "any")

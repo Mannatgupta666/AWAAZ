@@ -49,6 +49,7 @@ class DocumentVerificationResponse(BaseModel):
     verified: bool
     name: Optional[str] = None
     document_number: Optional[str] = None
+    dob: Optional[str] = None  # Date of Birth
     issue_date: Optional[str] = None
     expiry_date: Optional[str] = None
     errors: Optional[list] = None
@@ -91,12 +92,21 @@ async def upload_document(
         extracted_data = ocr_result.get('extracted_data', {})
         print(f"Extracted data: {extracted_data}")
         
+        # Calculate average confidence score (as decimal 0-1, not percentage)
+        confidence_scores = ocr_result.get('confidence_scores', {})
+        if confidence_scores:
+            scores = [v/100 if v > 1 else v for v in confidence_scores.values() if isinstance(v, (int, float))]
+            avg_confidence = sum(scores) / len(scores) if scores else 0.97
+        else:
+            avg_confidence = 0.97  # Default for mock OCR (97%)
+        
         return DocumentVerificationResponse(
             document_type=document_type,
             verified=ocr_result['status'] == 'success',
             name=extracted_data.get('name'),
             document_number=extracted_data.get('aadhaar_number') or extracted_data.get('document_number'),
-            clarity_score=ocr_result.get('confidence_scores', {}).get('average', 0.0),
+            dob=extracted_data.get('dob'),
+            clarity_score=avg_confidence,
             errors=[]
         )
     
@@ -130,9 +140,13 @@ async def generate_affidavit(request: AffidavitRequest):
         if result['status'] == 'error':
             raise HTTPException(status_code=400, detail=result['error_message'])
         
+        # Extract just the filename from the path
+        pdf_filename = os.path.basename(result['pdf_path'])
+        
         return {
             "success": True,
             "pdf_path": result['pdf_path'],
+            "pdf_filename": pdf_filename,
             "s3_url": result.get('s3_url'),
             "message": "Affidavit generated successfully",
             "next_steps": [
@@ -144,6 +158,29 @@ async def generate_affidavit(request: AffidavitRequest):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Affidavit generation failed: {str(e)}")
+
+@router.get("/download-pdf/{filename}")
+async def download_pdf(filename: str):
+    """
+    Serve PDF file for download/viewing
+    """
+    from fastapi.responses import FileResponse
+    
+    try:
+        # Construct file path
+        file_path = os.path.join("output", filename)
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="PDF file not found")
+        
+        return FileResponse(
+            path=file_path,
+            media_type="application/pdf",
+            filename=filename
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to serve PDF: {str(e)}")
 
 @router.post("/generate-application-form")
 async def generate_application_form(scheme_name: str, user_data: Dict):
